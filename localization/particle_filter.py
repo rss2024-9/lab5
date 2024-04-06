@@ -101,7 +101,7 @@ class ParticleFilter(Node):
         """
         with self.lock:
             probabilities = self.sensor_model.evaluate(self.particles, np.array(scan.ranges))
-            self.get_logger().info(str(np.sum(probabilities)))
+            #self.get_logger().info(str(np.sum(probabilities)))
             probabilities = probabilities/np.sum(probabilities)
             idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
             self.particles = self.particles[idx, :]
