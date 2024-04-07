@@ -107,7 +107,7 @@ class ParticleFilter(Node):
             # probabilities = np.exp(probabilities - np.max(probabilities))
             # probabilities /= np.sum(probabilities, axis=0)
             idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
-            self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
+            #self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
             self.particles = self.particles[idx, :]
             self.publish_transform()
 
@@ -154,8 +154,9 @@ class ParticleFilter(Node):
         self.last_odom_stamp = now
 
         velocity = odom.twist.twist.linear
-        dx, dy = velocity.x * dt, velocity.y * dt
-        dtheta = odom.twist.twist.angular.z * dt
+        #change to negative for real life
+        dx, dy = -velocity.x * dt, -velocity.y * dt
+        dtheta = -odom.twist.twist.angular.z * dt
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
