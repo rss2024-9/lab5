@@ -40,18 +40,22 @@ class MotionModel:
 
         ####################################
         
-        # # Creates a rotation + translation matrix
-        # T = lambda x: np.array([[np.cos(x[2]), -np.sin(x[2]), x[0]], [np.sin(x[2]), np.cos(x[2]), x[1]], [0, 0, 1]])
+        # Creates a rotation + translation matrix
+        T = lambda x: np.array([
+            [+np.cos(x[2]), -np.sin(x[2]), x[0]],
+            [+np.sin(x[2]), +np.cos(x[2]), x[1]],
+            [0,             0,             1   ],
+        ])
 
-        # dT = T(odometry)
-        # for i, particle in enumerate(particles):
-        #     t = np.matmul(T(particle), dT)
-        #     particles[i, 0] = t[0, 2]
-        #     particles[i, 1] = t[1, 2]
-        #     particles[i, 2] = np.arctan2(t[1, 0], t[0, 0])
-        # particles += 0.01 * np.random.normal(size=particles.shape)
+        dT = T(odometry)
+        for i, particle in enumerate(particles):
+            t = np.matmul(T(particle), dT)
+            particles[i, 0] = t[0, 2]
+            particles[i, 1] = t[1, 2]
+            particles[i, 2] = np.arctan2(t[1, 0], t[0, 0])
+        particles += max(0.75 * abs(odometry[2]), 0.0015) * np.random.normal(size=particles.shape)
         
-        # return particles
+        return particles
 
         #note these can be negative, account for accordingly in noise calc
         dx = odometry[0]
