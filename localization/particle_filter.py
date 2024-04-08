@@ -10,6 +10,7 @@ from threading import Lock
 from time import time
 
 import numpy as np
+import logging
 
 from rclpy.node import Node
 import rclpy
@@ -77,6 +78,10 @@ class ParticleFilter(Node):
         self.lock = Lock()
 
         self.last_odom_time = None
+
+        # arbitrary standard dev distance for exp eval
+        self.std_dev = 0.1
+        self.exp_eval = True
 
         self.get_logger().info("=============+READY+=============")
 
@@ -214,6 +219,14 @@ class ParticleFilter(Node):
         
         self.viz_pub.publish(msg)
 
+        if std_dev > self.std_dev and self.exp_eval == True:
+            std_dev = np.std(self.particles, axis=0)
+            with open('particle_std_dev.txt', 'a') as f:
+                f.write(f'Standard deviation: {std_dev}\n')
+        elif std_dev <= self.std_dev:
+            self.exp_eval = False
+
+
     @staticmethod
     def pose_to_msg(x, y, theta):
         msg = Pose()
@@ -238,6 +251,17 @@ class ParticleFilter(Node):
         theta = euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))[-1]
 
         return x, y, theta
+
+    def exp_eval(self):
+        '''
+        we want to evaluate performance by finding the standard deviation each time step
+        until we are within an arbitrary standard dev value.
+
+        then we will calculate the time it takes to converge
+        '''
+
+        std_dev = np.std(self.particles, axis=0)
+        
 
 
 def main(args=None):
