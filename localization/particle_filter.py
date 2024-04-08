@@ -161,8 +161,9 @@ class ParticleFilter(Node):
         self.last_odom_stamp = now
 
         velocity = odom.twist.twist.linear
-        dx, dy = velocity.x * dt, velocity.y * dt
-        dtheta = odom.twist.twist.angular.z * dt
+        #added negatives here for real life
+        dx, dy = -velocity.x * dt, -velocity.y * dt
+        dtheta = -odom.twist.twist.angular.z * dt
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
