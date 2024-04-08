@@ -10,6 +10,7 @@ from threading import Lock
 from time import time
 
 import numpy as np
+import logging
 
 from rclpy.node import Node
 import rclpy
@@ -78,6 +79,12 @@ class ParticleFilter(Node):
 
         self.last_odom_time = None
 
+        # arbitrary standard dev distance for exp eval
+        self.std_dev = 0.0
+        self.exp_eval = True
+        with open('particle_std_dev.txt', 'w') as f:
+            f.truncate(0)
+
         self.get_logger().info("=============+READY+=============")
 
         # Implement the MCL algorithm
@@ -107,7 +114,7 @@ class ParticleFilter(Node):
             # probabilities = np.exp(probabilities - np.max(probabilities))
             # probabilities /= np.sum(probabilities, axis=0)
             idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
-            self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
+            # self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
             self.particles = self.particles[idx, :]
             self.publish_transform()
 
@@ -201,6 +208,11 @@ class ParticleFilter(Node):
 
             self.particles[:, 2] = theta + (np.random.random(self.num_particles) - 0.5) * 0.1
 
+        # for experimental evaluation
+        with open('particle_std_dev.txt', 'w') as f:
+            f.truncate(0)
+        
+
     def visualize_particles(self):
         """
         Display the current state of the particles in RViz
@@ -213,6 +225,20 @@ class ParticleFilter(Node):
             msg.poses.extend(ParticleFilter.pose_to_msg(x, y, t) for [x, y, t] in self.particles)
         
         self.viz_pub.publish(msg)
+
+        # things for experimental evaluation
+        std_dev = np.std(self.particles)
+        # print("STANDARD", std_dev)
+        # self.get_logger().info(f"standard dev: {std_dev}")
+
+        if std_dev > self.std_dev and self.exp_eval == True:
+            with open('particle_std_dev.txt', 'a') as f:
+                f.write(f'{std_dev}\n')
+
+        elif std_dev <= self.std_dev and std_dev != 0.0:
+        # elif std_dev <= self.std_dev:
+            self.exp_eval = False
+
 
     @staticmethod
     def pose_to_msg(x, y, theta):
