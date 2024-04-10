@@ -109,14 +109,15 @@ class ParticleFilter(Node):
         with self.lock:
             probabilities = self.sensor_model.evaluate(self.particles, np.array(scan.ranges))
             # self.get_logger().info(str(np.sum(probabilities)))
-            probabilities **= 0.4
-            probabilities /= np.sum(probabilities)
-            # probabilities = np.exp(probabilities - np.max(probabilities))
-            # probabilities /= np.sum(probabilities, axis=0)
-            idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
-            # self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
-            self.particles = self.particles[idx, :]
-            self.publish_transform()
+            if probabilities is not None:
+                probabilities **= 0.4
+                probabilities /= np.sum(probabilities)
+                # probabilities = np.exp(probabilities - np.max(probabilities))
+                # probabilities /= np.sum(probabilities, axis=0)
+                idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
+                # self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
+                self.particles = self.particles[idx, :]
+                self.publish_transform()
 
     def odom_callback(self, odom: Odometry):
         """
