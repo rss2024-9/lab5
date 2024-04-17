@@ -180,7 +180,8 @@ class SensorModel:
         stride = max(1, observation.shape[0] // particle_scans_px.shape[1])
     
         # Slice the array to select every `stride`-th element
-        downsmpled_observation = observation[::stride]
+        # ...and trim excess if slicing isn't an exact multiple
+        downsmpled_observation = np.resize(observation[::stride], (particle_scans_px.shape[1],))
 
         #convert the downsampled observation to px and round
         px_observation = downsmpled_observation/(self.resolution*self.lidar_scale_to_map_scale)
@@ -190,6 +191,7 @@ class SensorModel:
 
 
         #calculate the probability of each vector
+        self.node.get_logger().info(f"{self.sensor_model_table.shape} vs ({px_observation.shape}, {particle_scans_px.shape})")
         particle_probs = self.sensor_model_table[px_observation,particle_scans_px]
 
         self.node.get_logger().info(f"{particle_probs.shape}")
@@ -232,7 +234,7 @@ class SensorModel:
         # Make the map set
         self.map_set = True
 
-        print("Map initialized")
+        self.node.get_logger().info("Map initialized")
 
 
 

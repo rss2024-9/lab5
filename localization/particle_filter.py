@@ -2,10 +2,12 @@ from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose, TransformStamped
 from sensor_msgs.msg import LaserScan
 
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros import TransformBroadcaster
 from threading import Lock
 from time import time
 
@@ -83,6 +85,21 @@ class ParticleFilter(Node):
         self.std_dev = 0.1
         self.exp_eval = True
 
+        # send a static transform from /laser frame to /base_link
+        self.tf_static_pub = StaticTransformBroadcaster(self)
+        t = TransformStamped()
+
+        # leave the transformation as the identity
+        #   technically the laser scan is slightly in front of the car's origin, but good enough
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "base_link"
+        t.child_frame_id = "laser"
+
+        self.tf_static_pub.sendTransform(t)
+
+        # stupid fucking bullshit
+        self.tf_pub = TransformBroadcaster(self)
+
         self.get_logger().info("=============+READY+=============")
 
         # Implement the MCL algorithm
@@ -104,17 +121,18 @@ class ParticleFilter(Node):
         Anytime the particles are update (either via the motion or sensor model), determine the
         "average" (term used loosely) particle pose and publish that transform.
         """
+        # self.get_logger().info("got particles")
         with self.lock:
             probabilities = self.sensor_model.evaluate(self.particles, np.array(scan.ranges))
-            # self.get_logger().info(str(np.sum(probabilities)))
-            probabilities **= 0.4
-            probabilities /= np.sum(probabilities)
-            # probabilities = np.exp(probabilities - np.max(probabilities))
-            # probabilities /= np.sum(probabilities, axis=0)
-            idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
-            self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
-            self.particles = self.particles[idx, :]
-            self.publish_transform()
+            if probabilities is not None:
+                probabilities **= 0.4
+                probabilities /= np.sum(probabilities)
+                # probabilities = np.exp(probabilities - np.max(probabilities))
+                # probabilities /= np.sum(probabilities, axis=0)
+                idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
+                self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
+                self.particles = self.particles[idx, :]
+                self.publish_transform()
 
     def odom_callback(self, odom: Odometry):
         """
@@ -159,8 +177,8 @@ class ParticleFilter(Node):
         self.last_odom_stamp = now
 
         velocity = odom.twist.twist.linear
-        dx, dy = velocity.x * dt, velocity.y * dt
-        dtheta = odom.twist.twist.angular.z * dt
+        dx, dy = -velocity.x * dt, -velocity.y * dt
+        dtheta = -odom.twist.twist.angular.z * dt
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
@@ -183,11 +201,26 @@ class ParticleFilter(Node):
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
         odom.header.frame_id = "map"
-        odom.child_frame_id = "base_link_pf"
+        odom.child_frame_id = "base_link"
         
         odom.pose.pose = ParticleFilter.pose_to_msg(x, y, theta)
 
         self.odom_pub.publish(odom)
+
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = "map"
+        t.child_frame_id = "base_link"
+        t.transform.translation.x = odom.pose.pose.position.x
+        t.transform.translation.y = odom.pose.pose.position.y
+        t.transform.translation.z = odom.pose.pose.position.z
+        t.transform.rotation.x = odom.pose.pose.orientation.x
+        t.transform.rotation.y = odom.pose.pose.orientation.y
+        t.transform.rotation.z = odom.pose.pose.orientation.z
+        t.transform.rotation.w = odom.pose.pose.orientation.w
+        
+        self.tf_pub.sendTransform(t)
+
 
     def pose_callback(self, msg: PoseWithCovarianceStamped):
         """
@@ -218,6 +251,7 @@ class ParticleFilter(Node):
             msg.poses.extend(ParticleFilter.pose_to_msg(x, y, t) for [x, y, t] in self.particles)
         
         self.viz_pub.publish(msg)
+        std_dev = np.std(self.particles)
 
         if std_dev > self.std_dev and self.exp_eval == True:
             std_dev = np.std(self.particles, axis=0)
