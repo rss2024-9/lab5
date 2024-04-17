@@ -46,6 +46,7 @@ class SensorModel:
         self.table_width = 201
         ####################################
 
+        self.node = node
         node.get_logger().info("%s" % self.map_topic)
         node.get_logger().info("%s" % self.num_beams_per_particle)
         node.get_logger().info("%s" % self.scan_theta_discretization)
@@ -129,8 +130,7 @@ class SensorModel:
         #normalize the p_table by d value (columns i think)
         total_column_sums = np.sum(p_table, axis=0)
         p_table_normalized = p_table / total_column_sums[np.newaxis, :]
-        #trouble shooting
-        sums = np.sum(p_table_normalized,axis=0)
+        
         self.sensor_model_table = p_table_normalized
 
 
@@ -159,7 +159,6 @@ class SensorModel:
             return
 
         ####################################
-        # TODO
         # Evaluate the sensor model here!
         #
         # You will probably want to use this function
