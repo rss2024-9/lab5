@@ -82,8 +82,10 @@ class ParticleFilter(Node):
         self.last_odom_time = None
 
         # arbitrary standard dev distance for exp eval
-        self.std_dev = 0.1
+        self.std_dev = 0.0
         self.exp_eval = True
+        with open('particle_std_dev.txt', 'w') as f:
+            f.truncate(0)
 
         # send a static transform from /laser frame to /base_link
         self.tf_static_pub = StaticTransformBroadcaster(self)
@@ -177,6 +179,7 @@ class ParticleFilter(Node):
         self.last_odom_stamp = now
 
         velocity = odom.twist.twist.linear
+        #added negatives here for real life
         dx, dy = -velocity.x * dt, -velocity.y * dt
         dtheta = -odom.twist.twist.angular.z * dt
 
@@ -239,6 +242,11 @@ class ParticleFilter(Node):
 
             self.particles[:, 2] = theta + (np.random.random(self.num_particles) - 0.5) * 0.1
 
+        # for experimental evaluation
+        with open('particle_std_dev.txt', 'w') as f:
+            f.truncate(0)
+        
+
     def visualize_particles(self):
         """
         Display the current state of the particles in RViz
@@ -253,11 +261,17 @@ class ParticleFilter(Node):
         self.viz_pub.publish(msg)
         std_dev = np.std(self.particles)
 
+        # things for experimental evaluation
+        std_dev = np.std(self.particles)
+        # print("STANDARD", std_dev)
+        # self.get_logger().info(f"standard dev: {std_dev}")
+
         if std_dev > self.std_dev and self.exp_eval == True:
-            std_dev = np.std(self.particles, axis=0)
             with open('particle_std_dev.txt', 'a') as f:
-                f.write(f'Standard deviation: {std_dev}\n')
-        elif std_dev <= self.std_dev:
+                f.write(f'{std_dev}\n')
+
+        elif std_dev <= self.std_dev and std_dev != 0.0:
+        # elif std_dev <= self.std_dev:
             self.exp_eval = False
 
 
@@ -285,17 +299,6 @@ class ParticleFilter(Node):
         theta = euler_from_quaternion((ori.x, ori.y, ori.z, ori.w))[-1]
 
         return x, y, theta
-
-    def exp_eval(self):
-        '''
-        we want to evaluate performance by finding the standard deviation each time step
-        until we are within an arbitrary standard dev value.
-
-        then we will calculate the time it takes to converge
-        '''
-
-        std_dev = np.std(self.particles, axis=0)
-        
 
 
 def main(args=None):
