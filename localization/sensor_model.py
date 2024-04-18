@@ -176,8 +176,8 @@ class SensorModel:
         #downsample the lidar
         stride = max(1, observation.shape[0] // particle_scans_px.shape[1])
     
-        # Slice the array to select every `stride`-th element
-        downsmpled_observation = observation[::stride]
+        # Slice the array to select every `stride`-th element, trim excess
+        downsmpled_observation = np.resize(observation[::stride], (particle_scans_px.shape[1],))
 
         #convert the downsampled observation to px and round
         px_observation = downsmpled_observation/(self.resolution*self.lidar_scale_to_map_scale)
@@ -227,7 +227,7 @@ class SensorModel:
         # Make the map set
         self.map_set = True
 
-        print("Map initialized")
+        self.node.get_logger().info("Map initialized")
 
 
 
