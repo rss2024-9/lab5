@@ -2,7 +2,9 @@ from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose, TransformStamped
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros import TransformBroadcaster
 from sensor_msgs.msg import LaserScan
 
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
@@ -79,6 +81,25 @@ class ParticleFilter(Node):
 
         # Synchronization primitive
         self.lock = Lock()
+
+        # Transformations from "/laser" to "/base_link"
+        # For some reason, laser scans are published on this frame in the robot
+        if not self.simulation:
+            self.tf_static_pub = StaticTransformBroadcaster(self)
+
+            # Create an identity transformation, which is technically incorrect because
+            # the LiDAR isn't exactly at the car's position but... good enough
+            t = TransformStamped()
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = "base_link"
+            t.child_frame_id = "laser"
+
+            self.tf_static_pub.sendTransform(t)
+
+        # Outside of simulation, the robot model isn't updated so we do it ourselves
+        if not self.simulation:
+            self.tf_pub = TransformBroadcaster(self)
+
 
         # arbitrary standard dev distance for exp eval
         self.std_dev = 0.0
@@ -164,6 +185,22 @@ class ParticleFilter(Node):
         odom.pose.pose = ParticleFilter.pose_to_msg(x, y, theta)
 
         self.odom_pub.publish(odom)
+
+        if not self.simulation:
+            t = TransformStamped()
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = "map"
+            t.child_frame_id = "base_link"
+
+            t.transform.translation.x = odom.pose.pose.position.x
+            t.transform.translation.y = odom.pose.pose.position.y
+            t.transform.translation.z = odom.pose.pose.position.z
+            t.transform.rotation.x = odom.pose.pose.orientation.x
+            t.transform.rotation.y = odom.pose.pose.orientation.y
+            t.transform.rotation.z = odom.pose.pose.orientation.z
+            t.transform.rotation.w = odom.pose.pose.orientation.w
+            
+            self.tf_pub.sendTransform(t)
 
     def pose_callback(self, msg: PoseWithCovarianceStamped):
         """
