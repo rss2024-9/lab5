@@ -5,7 +5,12 @@
   <node pkg="joy" name="joy_node" exec="joy_node"/>
 
    <!-- Launches map from map folder and map server-->
-  <arg name="map" default="$(find-pkg-share racecar_simulator)/maps/stata_basement.yaml"/>
+   <!--
+    CHANGE (yohang): This was moved to map.launch.xml, which must be launched separately and after this
+                     launch file has been fully initialized, or the sensor model will miss the map topic
+                     entirely.
+    -->
+  <!-- <arg name="map" default="$(find-pkg-share racecar_simulator)/maps/stata_basement.yaml"/>
   <node name="map_server" pkg="nav2_map_server" exec="map_server" output="screen">
     <param name="yaml_filename" value="$(var map)"/>
   </node>
@@ -13,7 +18,7 @@
   <node name="lifecycle_manager" exec="lifecycle_manager" pkg="nav2_lifecycle_manager" output="screen"> 
     <param name="autostart" value="True"/>
     <param name="node_names" value="['map_server']"/>
-  </node>
+  </node> -->
 
   <group>
     <include file="$(find-pkg-share racecar_simulator)/launch/racecar_model.launch.xml"/>
@@ -30,6 +35,7 @@
     <param name="odom_topic" value="/vesc/odom"/>
     <param name="angle_step" value="11"/>
     <param name="num_beams_per_particle" value="99" />
+    <param name="simulation" value="false" />
   </node>
 </launch>
 
