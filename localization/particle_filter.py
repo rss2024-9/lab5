@@ -2,7 +2,9 @@ from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose
+from geometry_msgs.msg import PoseWithCovarianceStamped, PoseArray, Pose, TransformStamped
+from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
+from tf2_ros import TransformBroadcaster
 from sensor_msgs.msg import LaserScan
 
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
@@ -22,6 +24,9 @@ class ParticleFilter(Node):
 
     def __init__(self):
         super().__init__("particle_filter")
+
+        self.declare_parameter('simulation', True)
+        self.simulation = self.get_parameter('simulation').get_parameter_value().bool_value
 
         self.declare_parameter('particle_filter_frame', "default")
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
@@ -77,7 +82,24 @@ class ParticleFilter(Node):
         # Synchronization primitive
         self.lock = Lock()
 
-        self.last_odom_time = None
+        # Transformations from "/laser" to "/base_link"
+        # For some reason, laser scans are published on this frame in the robot
+        if not self.simulation:
+            self.tf_static_pub = StaticTransformBroadcaster(self)
+
+            # Create an identity transformation, which is technically incorrect because
+            # the LiDAR isn't exactly at the car's position but... good enough
+            t = TransformStamped()
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = "base_link"
+            t.child_frame_id = "laser"
+
+            self.tf_static_pub.sendTransform(t)
+
+        # Outside of simulation, the robot model isn't updated so we do it ourselves
+        if not self.simulation:
+            self.tf_pub = TransformBroadcaster(self)
+
 
         # arbitrary standard dev distance for exp eval
         self.std_dev = 0.0
@@ -86,16 +108,6 @@ class ParticleFilter(Node):
             f.truncate(0)
 
         self.get_logger().info("=============+READY+=============")
-
-        # Implement the MCL algorithm
-        # using the sensor model and the motion model
-        #
-        # Make sure you include some way to initialize
-        # your particles, ideally with some sort
-        # of interactive interface in rviz
-        #
-        # Publish a transformation frame between the map
-        # and the particle_filter_frame.
     
     def laser_callback(self, scan: LaserScan):
         """
@@ -108,16 +120,20 @@ class ParticleFilter(Node):
         """
         with self.lock:
             probabilities = self.sensor_model.evaluate(self.particles, np.array(scan.ranges))
-            # self.get_logger().info(str(np.sum(probabilities)))
-            if probabilities is not None:
-                probabilities **= 0.4
-                probabilities /= np.sum(probabilities)
-                # probabilities = np.exp(probabilities - np.max(probabilities))
-                # probabilities /= np.sum(probabilities, axis=0)
-                idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
-                # self.get_logger().info(f"{probabilities.shape}, {np.mean(idx)}")
-                self.particles = self.particles[idx, :]
-                self.publish_transform()
+            
+            # Workaround for when the map isn't ready yet
+            if probabilities is None:
+                return
+            
+            # Temperature and normalization
+            probabilities **= 0.4
+            probabilities /= np.sum(probabilities)
+
+            # Resampling
+            idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
+            self.particles = self.particles[idx, :]
+
+            self.publish_transform()
 
     def odom_callback(self, odom: Odometry):
         """
@@ -127,33 +143,6 @@ class ParticleFilter(Node):
         Anytime the particles are update (either via the motion or sensor model), determine the
         "average" (term used loosely) particle pose and publish that transform.
         """
-        # x, y, theta = ParticleFilter.msg_to_pose(odom.pose.pose)
-
-        # try:
-        #     dx = x - self.last_x
-        #     dy = y - self.last_y
-        #     dtheta = np.arctan2(np.sin(theta) - np.sin(self.last_theta), np.cos(theta) - np.cos(self.last_theta))
-        # except AttributeError:
-        #     dx, dy, dtheta = 0, 0, 0
-        # self.last_x = x
-        # self.last_y = y
-        # self.last_theta = theta
-
-        # self.get_logger().info(f"d: {dx}, {dy}, {dtheta}")
-        # linear = odom.twist.twist.linear
-        # dx, dy = linear.x, linear.y
-        # dtheta = odom.twist.twist.angular.z
-        # self.get_logger().info(str(odom.header.stamp))
-        # if self.last_odom_time is None:
-        #     self.last_odom_time = time()
-        #     dt = 1
-        # else:
-        #     now = time()
-        #     dt = (now - self.last_odom_time)
-        #     self.last_odom_time = now
-        # dx *= dt
-        # dy *= dt
-        # dtheta *= dt
         now = odom.header.stamp.sec + odom.header.stamp.nanosec * 1e-9
         try:
             dt = now - self.last_odom_stamp
@@ -162,9 +151,13 @@ class ParticleFilter(Node):
         self.last_odom_stamp = now
 
         velocity = odom.twist.twist.linear
-        #make these negative to work in real life maybe(x-> -x, etc)
-        dx, dy = -velocity.x * dt, -velocity.y * dt
-        dtheta = -odom.twist.twist.angular.z * dt
+        dx, dy = velocity.x * dt, velocity.y * dt
+        dtheta = odom.twist.twist.angular.z * dt
+
+        if not self.simulation:
+            dx *= -1
+            dy *= -1
+            dtheta *= -1
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
@@ -187,11 +180,27 @@ class ParticleFilter(Node):
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
         odom.header.frame_id = "map"
-        odom.child_frame_id = "base_link_pf"
+        odom.child_frame_id = "base_link_pf" if self.simulation else "base_link"
         
         odom.pose.pose = ParticleFilter.pose_to_msg(x, y, theta)
 
         self.odom_pub.publish(odom)
+
+        if not self.simulation:
+            t = TransformStamped()
+            t.header.stamp = self.get_clock().now().to_msg()
+            t.header.frame_id = "map"
+            t.child_frame_id = "base_link"
+
+            t.transform.translation.x = odom.pose.pose.position.x
+            t.transform.translation.y = odom.pose.pose.position.y
+            t.transform.translation.z = odom.pose.pose.position.z
+            t.transform.rotation.x = odom.pose.pose.orientation.x
+            t.transform.rotation.y = odom.pose.pose.orientation.y
+            t.transform.rotation.z = odom.pose.pose.orientation.z
+            t.transform.rotation.w = odom.pose.pose.orientation.w
+            
+            self.tf_pub.sendTransform(t)
 
     def pose_callback(self, msg: PoseWithCovarianceStamped):
         """
@@ -230,15 +239,12 @@ class ParticleFilter(Node):
 
         # things for experimental evaluation
         std_dev = np.std(self.particles)
-        # print("STANDARD", std_dev)
-        # self.get_logger().info(f"standard dev: {std_dev}")
 
         if std_dev > self.std_dev and self.exp_eval == True:
             with open('particle_std_dev.txt', 'a') as f:
                 f.write(f'{std_dev}\n')
 
         elif std_dev <= self.std_dev and std_dev != 0.0:
-        # elif std_dev <= self.std_dev:
             self.exp_eval = False
 
 
