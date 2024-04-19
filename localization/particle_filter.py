@@ -34,12 +34,14 @@ class ParticleFilter(Node):
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
 
         # Particles initialization constants
-        self.declare_parameter('num_particles', 1000)
+        self.declare_parameter('num_particles', 100)
         self.declare_parameter('particle_spread', 1.0)
 
         self.num_particles = self.get_parameter('num_particles').get_parameter_value().integer_value
         self.particle_spread = self.get_parameter('particle_spread').get_parameter_value().double_value
         self.particles = np.zeros((self.num_particles, 3))
+
+        self.get_logger().info(f"Running with {self.num_particles} particles")
 
         #  *Important Note #1:* It is critical for your particle
         #     filter to obtain the following topic names from the
@@ -128,7 +130,7 @@ class ParticleFilter(Node):
                 return
             
             # Temperature and normalization
-            probabilities **= 0.4
+            probabilities **= 0.4 if self.simulation else 0.9
             probabilities /= np.sum(probabilities)
 
             # Resampling
