@@ -154,7 +154,6 @@ class SensorModel:
                the probability of each particle existing
                given the observation and the map.
         """
-
         if not self.map_set:
             return
 
@@ -185,7 +184,6 @@ class SensorModel:
         px_observation = px_observation.astype(int)
         px_observation = np.clip(px_observation,0,(self.table_width-1))
 
-
         #calculate the probability of each vector
         particle_probs = self.sensor_model_table[px_observation,particle_scans_px]
 
@@ -208,10 +206,10 @@ class SensorModel:
         origin_p = map_msg.info.origin.position
         origin_o = map_msg.info.origin.orientation
         origin_o = euler_from_quaternion((
+            origin_o.w,
             origin_o.x,
             origin_o.y,
             origin_o.z,
-            origin_o.w,
         ))
         origin = (origin_p.x, origin_p.y, origin_o[2])
 

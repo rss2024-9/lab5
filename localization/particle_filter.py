@@ -28,6 +28,8 @@ class ParticleFilter(Node):
         self.declare_parameter('simulation', True)
         self.simulation = self.get_parameter('simulation').get_parameter_value().bool_value
 
+        self.get_logger().info(f"Running in {'Simulation' if self.simulation else 'Real Life'}")
+
         self.declare_parameter('particle_filter_frame', "default")
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
 
