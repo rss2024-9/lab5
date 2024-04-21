@@ -164,34 +164,18 @@ class SensorModel:
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
 
-        particle_scans = self.scan_sim.scan(particles)
+        # Downsample
+        observation = observation[np.linspace(0, len(observation) - 1, self.num_beams_per_particle, dtype=int)]
 
-        #convert scans from meters to pixels and round to the nearest int
-        particle_scans_px = particle_scans/(self.resolution*self.lidar_scale_to_map_scale)
-        particle_scans_px = np.round(particle_scans_px)
-        particle_scans_px = particle_scans_px.astype(int)
-        particle_scans_px = np.clip(particle_scans_px,0,(self.table_width-1))
+        raycasts = self.scan_sim.scan(particles)
+        raycasts /= self.resolution * self.lidar_scale_to_map_scale
+        raycasts = np.clip(raycasts, 0, self.table_width - 1).astype(int)
 
-        #downsample the lidar
-        stride = max(1, observation.shape[0] // particle_scans_px.shape[1])
-    
-        # Slice the array to select every `stride`-th element, trim excess
-        downsmpled_observation = np.resize(observation[::stride], (particle_scans_px.shape[1],))
-
-        #convert the downsampled observation to px and round
-        px_observation = downsmpled_observation/(self.resolution*self.lidar_scale_to_map_scale)
-        px_observation = np.round(px_observation)
-        px_observation = px_observation.astype(int)
-        px_observation = np.clip(px_observation,0,(self.table_width-1))
+        observation /= self.resolution * self.lidar_scale_to_map_scale
+        observation = np.clip(observation, 0, self.table_width - 1).astype(int)
 
         #calculate the probability of each vector
-        particle_probs = self.sensor_model_table[px_observation,particle_scans_px]
-
-        #calc each particles probability
-        total_particle_probs = np.prod(particle_probs, axis=1)
-
-        return total_particle_probs
-
+        return np.prod(self.sensor_model_table[observation, raycasts], axis=1)
 
         ####################################
 
@@ -206,10 +190,10 @@ class SensorModel:
         origin_p = map_msg.info.origin.position
         origin_o = map_msg.info.origin.orientation
         origin_o = euler_from_quaternion((
-            origin_o.w,
             origin_o.x,
             origin_o.y,
             origin_o.z,
+            origin_o.w,
         ))
         origin = (origin_p.x, origin_p.y, origin_o[2])
 

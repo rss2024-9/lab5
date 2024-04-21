@@ -40,6 +40,7 @@ class ParticleFilter(Node):
         self.num_particles = self.get_parameter('num_particles').get_parameter_value().integer_value
         self.particle_spread = self.get_parameter('particle_spread').get_parameter_value().double_value
         self.particles = np.zeros((self.num_particles, 3))
+        self.weights = np.ones(self.num_particles) / self.num_particles
 
         self.get_logger().info(f"Running with {self.num_particles} particles")
 
@@ -106,10 +107,10 @@ class ParticleFilter(Node):
 
 
         # arbitrary standard dev distance for exp eval
-        self.std_dev = 0.0
-        self.exp_eval = True
-        with open('particle_std_dev.txt', 'w') as f:
-            f.truncate(0)
+        # self.std_dev = 0.0
+        # self.exp_eval = True
+        # with open('particle_std_dev.txt', 'w') as f:
+        #     f.truncate(0)
 
         self.get_logger().info("=============+READY+=============")
     
@@ -130,12 +131,13 @@ class ParticleFilter(Node):
                 return
             
             # Temperature and normalization
-            probabilities **= 0.4 if self.simulation else 0.9
+            probabilities **= 0.25 if self.simulation else 0.4
             probabilities /= np.sum(probabilities)
 
             # Resampling
             idx = np.random.choice(self.num_particles, self.num_particles, p=probabilities)
             self.particles = self.particles[idx, :]
+            self.weights = probabilities[idx]
 
             self.publish_transform()
 
@@ -175,11 +177,14 @@ class ParticleFilter(Node):
         Anytime the particles are update (either via the motion or sensor model), determine the
         "average" (term used loosely) particle pose and publish that transform.
         """
-        x = np.average(self.particles[:, 0]).item()
-        y = np.average(self.particles[:, 1]).item()
+        x = np.average(self.particles[:, 0], weights=self.weights).item()
+        y = np.average(self.particles[:, 1], weights=self.weights).item()
 
         theta = self.particles[:, 2]
-        theta = np.arctan2(np.average(np.sin(theta)), np.average(np.cos(theta))).item()
+        theta = np.arctan2(
+            np.average(np.sin(theta), weights=self.weights),
+            np.average(np.cos(theta), weights=self.weights))
+        theta = theta.item()
 
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
@@ -222,10 +227,12 @@ class ParticleFilter(Node):
             self.particles += np.array([x, y, 0])
 
             self.particles[:, 2] = theta + (np.random.random(self.num_particles) - 0.5) * 0.1
+            
+            self.weights = np.ones(self.num_particles) / self.num_particles
 
         # for experimental evaluation
-        with open('particle_std_dev.txt', 'w') as f:
-            f.truncate(0)
+        # with open('particle_std_dev.txt', 'w') as f:
+            # f.truncate(0)
         
 
     def visualize_particles(self):
@@ -242,14 +249,14 @@ class ParticleFilter(Node):
         self.viz_pub.publish(msg)
 
         # things for experimental evaluation
-        std_dev = np.std(self.particles)
+        # std_dev = np.std(self.particles)
 
-        if std_dev > self.std_dev and self.exp_eval == True:
-            with open('particle_std_dev.txt', 'a') as f:
-                f.write(f'{std_dev}\n')
+        # if std_dev > self.std_dev and self.exp_eval == True:
+        #     with open('particle_std_dev.txt', 'a') as f:
+        #         f.write(f'{std_dev}\n')
 
-        elif std_dev <= self.std_dev and std_dev != 0.0:
-            self.exp_eval = False
+        # elif std_dev <= self.std_dev and std_dev != 0.0:
+        #     self.exp_eval = False
 
 
     @staticmethod

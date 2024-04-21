@@ -38,12 +38,9 @@ class MotionModel:
             particles[i, 1] = t[1, 2]
             particles[i, 2] = np.arctan2(t[1, 0], t[0, 0])
 
-        if self.node.simulation:
-            noise = max(0.75 * abs(odometry[2]), 0.0015)
-        else:
-            noise = max(0.5 * abs(odometry[2]), 0.0015)
-        particles += noise * np.random.normal(size=particles.shape)
-        particles[:, 2] += noise * np.random.normal(size=particles.shape[0])
+        # Noise +/- range for (x, y, theta)
+        noise = (0.05, 0.05, 0.15)
+        particles += (np.random.random(particles.shape) - 0.5) * 2 * noise
 
         return particles
  
