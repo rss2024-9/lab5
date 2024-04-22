@@ -225,7 +225,7 @@ class ParticleFilter(Node):
         Prediction Step
         """
 
-        self.get_logger().info("In odom callback")
+        # self.get_logger().info("In odom callback")
         if not self.sensor_model.map_set:
             return
 
@@ -238,7 +238,7 @@ class ParticleFilter(Node):
 
         dt = (now - self.prev_time).nanoseconds / 1e9
 
-        self.get_logger().info(f'dt {dt} vx {vx} vy {vy}')
+        # self.get_logger().info(f'dt {dt} vx {vx} vy {vy}')
 
         dx, dy = vx * dt, vy * dt
         dtheta = wz * dt
