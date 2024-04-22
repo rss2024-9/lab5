@@ -1,26 +1,21 @@
 import numpy as np
-import math
 import sys
+from nav_msgs.msg import OccupancyGrid
+from tf_transformations import euler_from_quaternion
+
 from scan_simulator_2d import PyScanSimulator2D
+
 # Try to change to just `from scan_simulator_2d import PyScanSimulator2D` 
 # if any error re: scan_simulator_2d occurs
 
-from tf_transformations import euler_from_quaternion
-from math import sqrt, exp, pi
-
-from nav_msgs.msg import OccupancyGrid
-
-import sys
-
 np.set_printoptions(threshold=sys.maxsize)
-
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 
 class SensorModel:
 
     def __init__(self, node):
+        self.node = node
+
         node.declare_parameter('map_topic', "default")
         node.declare_parameter('num_beams_per_particle', "default")
         node.declare_parameter('scan_theta_discretization', "default")
@@ -36,18 +31,17 @@ class SensorModel:
             'lidar_scale_to_map_scale').get_parameter_value().double_value
 
         ####################################
-        # Adjust these parameters
-        self.alpha_hit = 0.74
-        self.alpha_short = 0.07
-        self.alpha_max = 0.07
-        self.alpha_rand = 0.12
+        self.alpha_hit = .74
+        self.alpha_short = .07
+        self.alpha_max = .07
+        self.alpha_rand = .12
         self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
+        self.z_max = 200.0
         ####################################
 
-        self.node = node
         node.get_logger().info("%s" % self.map_topic)
         node.get_logger().info("%s" % self.num_beams_per_particle)
         node.get_logger().info("%s" % self.scan_theta_discretization)
@@ -73,6 +67,29 @@ class SensorModel:
             self.map_topic,
             self.map_callback,
             1)
+        
+        
+        node.get_logger().info("finished setting up sensor model")
+
+    def pmax(self, z_k):
+        return 1 if z_k == self.z_max else 0
+
+    def phit(self, z_k, d):
+        return (1 / np.sqrt(2 * np.pi * self.sigma_hit * self.sigma_hit)) * np.exp(
+            -(np.square(z_k - d)) / (2 * self.sigma_hit ** 2)) if 0 <= z_k and z_k <= self.z_max else 0
+
+    def pshort(self, z_k, d):
+        return 2 * (1 - z_k / d) / d if 0 <= z_k and z_k <= d and d != 0 else 0
+
+    def prand(self, z_k):
+        return 1 / self.z_max if 0 <= z_k and z_k <= self.z_max else 0
+
+    def meters_to_pixels(self, meters):
+        return (meters / float(self.resolution * self.lidar_scale_to_map_scale))
+
+    def pdf_without_phit(self, z_k, d):
+        return (self.alpha_max * self.pmax(z_k) + self.alpha_rand * self.prand(z_k) + self.alpha_short * self.pshort(
+            z_k, d))
 
     def precompute_sensor_model(self):
         """
@@ -93,38 +110,35 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        a_hit = self.alpha_hit
-        a_short = self.alpha_short
-        a_max = self.alpha_max
-        a_rand = self.alpha_rand
-        sigma = self.sigma_hit
-        z_max = self.table_width - 1
 
-        def p_hit(z, d):
-            if 0 <= z <= z_max:
-                return (1/sqrt(2*pi*sigma**2)) * exp(-((z-d)**2)/(2*sigma**2))
-            return 0
+        # x = [] + 1
+        # 
+        for z_k in range(0, 201):
+            for d in range(0, 201):
+                self.sensor_model_table[z_k, d] = self.phit(float(z_k), float(d))
 
-        def p_short(z, d):
-            return ((2/d) * (1 - z/d) if 0 <= z < d and d != 0 else 0)
+        nu = np.sum(self.sensor_model_table, axis=0)
+        self.sensor_model_table /= nu
+        # self.node.get_logger().info(f"nu_value {nu}")
 
-        def p_max(z):
-            return 1 if z == z_max else 0
+        for z_k in range(0, 201):
+            for d in range(0, 201):
+                # self.sensor_model_table[z_k, d] = self.alpha_hit * self.sensor_model_table[
+                #     z_k, d] + self.pdf_without_phit(float(z_k), float(d))
+                self.sensor_model_table[z_k, d] = self.alpha_hit * self.sensor_model_table[
+                    z_k, d] + self.alpha_short * self.pshort(z_k, d) + self.alpha_max * self.pmax(
+                    z_k) + self.alpha_rand * self.prand(
+                    z_k)
 
-        def p_rand(z):
-            return 1/z_max if 0 <= z <= z_max else 0
+        thesum = np.sum(self.sensor_model_table, axis=0)
+        self.node.get_logger().info(f"value {self.sensor_model_table[:, 0].sum()}")
 
-        # Compute p-hit and normalize it before computing the whole table
-        for i in range(self.table_width):
-            for j in range(self.table_width):
-                self.sensor_model_table[i][j] = p_hit(i, j)
-        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
-        self.sensor_model_table *= a_hit
+        # for z_k in range(0, self.table_width):
+        #     for d in range(0, self.table_width):
+        #         self.sensor_model_table[z_k, d] = self.alpha_hit * self.phit(float(z_k),
+        #                                                                      float(d)) + self.pdf_without_phit(
+        #             float(z_k), float(d))
 
-        # Compute the other probabilities and normalize everything
-        for i in range(self.table_width):
-            for j in range(self.table_width):
-                self.sensor_model_table[i][j] += a_short*p_short(i, j) + a_max*p_max(i) + a_rand*p_rand(i)
         self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
 
     def evaluate(self, particles, observation):
@@ -147,32 +161,44 @@ class SensorModel:
                the probability of each particle existing
                given the observation and the map.
         """
+        
+        # self.node.get_logger().info("evaluating sensor model")
+        
         if not self.map_set:
             return
 
-        ####################################
-        # Evaluate the sensor model here!
-        #
-        # You will probably want to use this function
-        # to perform ray tracing from all the particles.
-        # This produces a matrix of size N x num_beams_per_particle 
+        # scans: d (depending on i) for each particle. [N x num_beams]
+        # Calculate likelihood P(zk | xk, "i") (how likely is zk if we scan from angle i and position xk).
 
-        # Downsample
-        observation = observation[np.linspace(0, len(observation) - 1, self.num_beams_per_particle, dtype=int)]
+        # zk: the actual scan from the lidar 
+        # xk: the potential positions (particles)
+        # d_i: the ground truth for this angle i. 
+    
+        stride = 11 # 10
 
-        raycasts = self.scan_sim.scan(particles)
-        raycasts /= self.resolution * self.lidar_scale_to_map_scale
-        raycasts = np.clip(raycasts, 0, self.table_width - 1).astype(int)
+        scans = self.scan_sim.scan(np.array(particles))
+        N, m = scans.shape
+        # self.node.get_logger().info(str(np.array(particles).shape))
+        # self.node.get_logger().info(str(np.array(scans).shape))
+        # self.node.get_logger().info(str(np.array(observation).shape))
+        observation = self.meters_to_pixels(np.array(observation[::11]))# [::-1]  # 1 x num_beams
+        # self.node.get_logger().info(str(observation.shape))
+        observation = np.repeat(observation[np.newaxis, :], N, axis=0)  # N x num_beams
+        observation = np.rint(np.clip(observation, 0, 200)).astype(int)
 
-        observation /= self.resolution * self.lidar_scale_to_map_scale
-        observation = np.clip(observation, 0, self.table_width - 1).astype(int)
+        scans = self.meters_to_pixels(scans)
+        scans = np.rint(np.clip(scans, 0, 200)).astype(int)
+        
+        probs = self.sensor_model_table[observation, scans]  # length N
 
-        #calculate the probability of each vector
-        return np.prod(self.sensor_model_table[observation, raycasts], axis=1)
-
-        ####################################
+        # probs = np.prod(probs, axis = 1) #intersect of all d^i's in each particle simulated scan
+        probs = np.exp(np.sum(np.log(probs), axis=1))
+        return np.array(np.power(probs, 1 / 2.2))
+        # return probs
 
     def map_callback(self, map_msg):
+        self.node.get_logger().info('yo i got the map')
+        
         # Convert the map to a numpy array
         self.map = np.array(map_msg.data, np.double) / 100.
         self.map = np.clip(self.map, 0, 1)
@@ -186,9 +212,10 @@ class SensorModel:
             origin_o.x,
             origin_o.y,
             origin_o.z,
-            origin_o.w,
-        ))
+            origin_o.w))
         origin = (origin_p.x, origin_p.y, origin_o[2])
+
+        self.node.get_logger().info('about to set')
 
         # Initialize a map with the laser scan
         self.scan_sim.set_map(
@@ -199,15 +226,9 @@ class SensorModel:
             origin,
             0.5)  # Consider anything < 0.5 to be free
 
+        self.node.get_logger().info('done setting map')
+
         # Make the map set
         self.map_set = True
 
         self.node.get_logger().info("Map initialized")
-
-
-
-
-
-
-
-

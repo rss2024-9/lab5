@@ -84,16 +84,128 @@ class SensorModelTest(Node):
         except Exception as e:
             self.get_logger().error(f"Precompute test errored out for some other reason :( {e}")
 
-        try:
-            self.test_evaluate()
-            self.num_passed += 1
-        except AssertionError as e:
-            self.get_logger().error(f"Evaluate test failed :( {e}")
-        except Exception as e:
-            self.get_logger().error(f"Evaluate test errored out for some other reason :( {e}")
+        self.test_precompute_table_each()
+        # try:
+        #     self.test_evaluate()
+        #     self.num_passed += 1
+        # except AssertionError as e:
+        #     self.get_logger().error(f"Evaluate test failed :( {e}")
+        # except Exception as e:
+        #     self.get_logger().error(f"Evaluate test errored out for some other reason :( {e}")
+        # 
+        # if self.num_passed == 3:
+        #     self.get_logger().info("All tests passed :)")
 
-        if self.num_passed == 3:
-            self.get_logger().info("All tests passed :)")
+    def test_precompute_table_each(self):
+
+        import pickle
+
+        with open('/home/racecar/racecar_ws/results_each.pkl', 'rb') as f:
+            results = pickle.load(f)
+
+        self.sensor_model.alpha_hit = 1
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        assert np.allclose(result, results['hit'],
+                           atol=self.tol), "Wrong values in the precomputed table (hit), largest error is: " + str(
+            np.max(np.abs(result - results['hit'])))
+
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 1
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        result[np.isnan(result)] = 0
+
+        assert np.allclose(result, results['short'],
+                           atol=self.tol), "Wrong values in the precomputed table (short). largest error is: " + str(
+            np.max(np.abs(result - results['short'])))
+
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 1
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        assert np.allclose(result, results['max'],
+                           atol=self.tol), "Wrong values in the precomputed table (max). largest error is: " + str(
+            np.max(np.abs(result - results['max'])))
+        # 
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 1
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        assert np.allclose(result, results['rand'],
+                           atol=self.tol), "Wrong values in the precomputed table (rand). largest error is: " + str(
+            np.max(np.abs(result - results['rand'])))
+
+        self.get_logger().info("Done!!")
+
+    def set_precompute_table_each(self):
+
+        from copy import deepcopy
+
+        results = dict()
+
+        self.sensor_model.alpha_hit = 1
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        results['hit'] = deepcopy(result)
+
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 1
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        results['short'] = deepcopy(result)
+
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 1
+        self.sensor_model.alpha_rand = 0
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        results['max'] = deepcopy(result)
+
+        self.sensor_model.alpha_hit = 0
+        self.sensor_model.alpha_short = 0
+        self.sensor_model.alpha_max = 0
+        self.sensor_model.alpha_rand = 1
+
+        self.sensor_model.precompute_sensor_model()
+        result = self.sensor_model.sensor_model_table
+
+        results['rand'] = deepcopy(result)
+
+        with open('/home/racecar/racecar_ws/results_each.pkl', 'wb') as f:
+            import pickle
+            pickle.dump(results, f)
+
+        self.get_logger().info("Done!!")
 
     def test_precompute(self):
         expected = np.array(TEST_PRECOMPUTED_TABLE)

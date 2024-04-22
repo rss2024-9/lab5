@@ -1,6 +1,6 @@
 particle_filter:
   ros__parameters:
-    num_particles: 1000
+    num_particles: 200
 
     # The number of lidar beams emitted from
     # each particle. This doesn't need to be
@@ -10,9 +10,6 @@ particle_filter:
 
     # The field of view centered around theta=0
     scan_field_of_view: 4.71 # radians
-
-    # angle stride for downsampling the lidar data
-    angle_step: 11
 
     # Discretize the theta space for faster ray tracing
     scan_theta_discretization: 500.0
