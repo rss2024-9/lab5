@@ -156,18 +156,18 @@ class ParticleFilter(Node):
             0, 0, theta_avg)
         self.tf_broadcaster.sendTransform(transform)
 
-        if debug:
-            array = PoseArray()
-            array.header.frame_id = '/map'
-            array.poses = []
-            for particle in self.particles:
-                pose = Pose()
-                pose.position.x, pose.position.y = particle[:2]
-                pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = quaternion_from_euler(
-                    0, 0, particle[2])
-                array.poses.append(pose)
+        # if debug:
+        #     array = PoseArray()
+        #     array.header.frame_id = '/map'
+        #     array.poses = []
+        #     for particle in self.particles:
+        #         pose = Pose()
+        #         pose.position.x, pose.position.y = particle[:2]
+        #         pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = quaternion_from_euler(
+        #             0, 0, particle[2])
+        #         array.poses.append(pose)
 
-            self.particles_pub.publish(array)
+        #     self.particles_pub.publish(array)
 
         return msg
 
