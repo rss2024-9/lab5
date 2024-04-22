@@ -39,7 +39,7 @@ class MotionModel:
             particles[i, 2] = np.arctan2(t[1, 0], t[0, 0])
 
         # Noise +/- range for (x, y, theta)
-        noise = (0.05, 0.05, 0.15)
+        noise = (0.05, 0.05, 0.15) if self.node.simulation else (0.01, 0.01, 0.05)
         particles += (np.random.random(particles.shape) - 0.5) * 2 * noise
 
         return particles
