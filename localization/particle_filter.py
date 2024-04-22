@@ -240,7 +240,7 @@ class ParticleFilter(Node):
 
         # self.get_logger().info(f'dt {dt} vx {vx} vy {vy}')
 
-        dx, dy = vx * dt, vy * dt
+        dx, dy = -vx * dt, -vy * dt
         dtheta = wz * dt
 
         delta_x = [dx, dy, dtheta]
