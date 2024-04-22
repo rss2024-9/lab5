@@ -6,6 +6,7 @@ from scan_simulator_2d import PyScanSimulator2D
 # if any error re: scan_simulator_2d occurs
 
 from tf_transformations import euler_from_quaternion
+from math import sqrt, exp, pi
 
 from nav_msgs.msg import OccupancyGrid
 
@@ -92,47 +93,39 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        alpha_hit = self.alpha_hit
-        alpha_short = self.alpha_short
-        alpha_max = self.alpha_max
-        alpha_rand = self.alpha_rand
-        sigma_hit = self.sigma_hit
-        eta = 1
+        a_hit = self.alpha_hit
+        a_short = self.alpha_short
+        a_max = self.alpha_max
+        a_rand = self.alpha_rand
+        sigma = self.sigma_hit
+        z_max = self.table_width - 1
 
+        def p_hit(z, d):
+            if 0 <= z <= z_max:
+                return (1/sqrt(2*pi*sigma**2)) * exp(-((z-d)**2)/(2*sigma**2))
+            return 0
 
-        z_max = self.table_width-1 #assumes that the longest dist (in px) is the last entry in the table
-        d_array = np.linspace(0.000001,z_max,self.table_width)
-        z_array = np.linspace(0.000001,z_max,self.table_width)
+        def p_short(z, d):
+            return ((2/d) * (1 - z/d) if 0 <= z < d and d != 0 else 0)
 
-        # Compute raw p_hit
-        diff_squared = (z_array[:, np.newaxis] - d_array[np.newaxis, :]) ** 2
-        exponent = - diff_squared / (2 * sigma_hit**2)
-        constant = eta * 1 / (2 * math.pi * sigma_hit**2)**0.5
-        p_hit = constant * np.exp(exponent)
-        #normalize p_hit
-        column_sums = np.sum(p_hit, axis=0) 
-        p_hit_normalized = p_hit / column_sums[np.newaxis, :] 
-        p_hit = p_hit_normalized
+        def p_max(z):
+            return 1 if z == z_max else 0
 
-        #compute p_short
-        constant = 2/d_array[np.newaxis,:]
-        multiplier = np.where(d_array[np.newaxis,:]>z_array[:,np.newaxis],1-z_array[:,np.newaxis]/d_array[np.newaxis,:],0)
-        p_short = constant*multiplier
+        def p_rand(z):
+            return 1/z_max if 0 <= z <= z_max else 0
 
-        #compute p_max
-        p_max = np.where(z_array[:,np.newaxis]==z_max,1,0)
+        # Compute p-hit and normalize it before computing the whole table
+        for i in range(self.table_width):
+            for j in range(self.table_width):
+                self.sensor_model_table[i][j] = p_hit(i, j)
+        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
+        self.sensor_model_table *= a_hit
 
-        #compute p_rand
-        p_rand = np.full((self.table_width,self.table_width),1/z_max)
-
-        #compute total probability
-        p_table = alpha_hit*p_hit+alpha_max*p_max+alpha_rand*p_rand+alpha_short*p_short
-        #normalize the p_table by d value (columns i think)
-        total_column_sums = np.sum(p_table, axis=0)
-        p_table_normalized = p_table / total_column_sums[np.newaxis, :]
-        
-        self.sensor_model_table = p_table_normalized
-
+        # Compute the other probabilities and normalize everything
+        for i in range(self.table_width):
+            for j in range(self.table_width):
+                self.sensor_model_table[i][j] += a_short*p_short(i, j) + a_max*p_max(i) + a_rand*p_rand(i)
+        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=0)
 
     def evaluate(self, particles, observation):
         """
