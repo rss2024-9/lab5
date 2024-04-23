@@ -130,8 +130,7 @@ class ParticleFilter(Node):
             if probabilities is None:
                 return
             
-            # Temperature and normalization
-            probabilities **= 0.25 if self.simulation else 0.4
+            # Normalization
             probabilities /= np.sum(probabilities)
 
             # Resampling
@@ -163,7 +162,7 @@ class ParticleFilter(Node):
         if not self.simulation:
             dx *= -1
             dy *= -1
-            dtheta *= -1
+            # dtheta *= -1
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
@@ -189,7 +188,7 @@ class ParticleFilter(Node):
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
         odom.header.frame_id = "map"
-        odom.child_frame_id = "base_link_pf" if self.simulation else "base_link"
+        # odom.child_frame_id = "base_link_pf" if self.simulation else "base_link"
         
         odom.pose.pose = ParticleFilter.pose_to_msg(x, y, theta)
 
@@ -198,8 +197,8 @@ class ParticleFilter(Node):
         if not self.simulation:
             t = TransformStamped()
             t.header.stamp = self.get_clock().now().to_msg()
-            t.header.frame_id = "map"
-            t.child_frame_id = "base_link"
+            t.header.frame_id = "/map"
+            t.child_frame_id = "/base_link"
 
             t.transform.translation.x = odom.pose.pose.position.x
             t.transform.translation.y = odom.pose.pose.position.y
@@ -223,12 +222,14 @@ class ParticleFilter(Node):
         x, y, theta = ParticleFilter.msg_to_pose(msg.pose.pose)
 
         with self.lock:
-            self.particles = (np.random.random(self.particles.shape) - 0.5) * self.particle_spread
+            self.particles = np.random.randn(*self.particles.shape) * self.particle_spread
             self.particles += np.array([x, y, 0])
 
-            self.particles[:, 2] = theta + (np.random.random(self.num_particles) - 0.5) * 0.1
+            self.particles[:, 2] = theta + np.random.randn(self.num_particles) * (np.pi / 4)
             
             self.weights = np.ones(self.num_particles) / self.num_particles
+
+            self.publish_transform()
 
         # for experimental evaluation
         # with open('particle_std_dev.txt', 'w') as f:
