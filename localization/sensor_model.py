@@ -168,7 +168,7 @@ class SensorModel:
         observation = np.clip(observation, 0, self.table_width - 1).astype(int)
 
         #calculate the probability of each vector
-        return np.prod(self.sensor_model_table[observation, raycasts], axis=1)
+        return np.exp(np.prod(self.sensor_model_table[observation, raycasts], axis=1)) ** (1/2.2)
 
         ####################################
 
