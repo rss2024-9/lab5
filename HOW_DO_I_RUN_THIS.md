@@ -15,5 +15,5 @@ For both scenarios, the order in which you run these commands is pretty critical
 
 ## In Real Life (Staff Solution)
 1. `teleop`
-2. `ros2 launch localization real_localize.launch.xml`
-3. `ros2 launch localization localize_real_env.launch.xml`
+2. `ros2 launch localization localize.launch.xml`
+3. `ros2 launch racecar_simulator localization_simulate.launch.xml`
