@@ -162,7 +162,7 @@ class ParticleFilter(Node):
         if not self.simulation:
             dx *= -1
             dy *= -1
-            # dtheta *= -1
+            dtheta *= -1
 
         with self.lock:
             self.particles = self.motion_model.evaluate(self.particles, np.array([dx, dy, dtheta]))
