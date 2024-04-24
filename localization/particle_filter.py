@@ -35,7 +35,7 @@ class ParticleFilter(Node):
 
         # Particles initialization constants
         self.declare_parameter('num_particles', 100)
-        self.declare_parameter('particle_spread', 1.0)
+        self.declare_parameter('particle_spread', 0.5)
 
         self.num_particles = self.get_parameter('num_particles').get_parameter_value().integer_value
         self.particle_spread = self.get_parameter('particle_spread').get_parameter_value().double_value
@@ -225,7 +225,7 @@ class ParticleFilter(Node):
             self.particles = np.random.randn(*self.particles.shape) * self.particle_spread
             self.particles += np.array([x, y, 0])
 
-            self.particles[:, 2] = theta + np.random.randn(self.num_particles) * (np.pi / 4)
+            self.particles[:, 2] = theta + np.random.randn(self.num_particles) * (np.pi / 8)
             
             self.weights = np.ones(self.num_particles) / self.num_particles
 
