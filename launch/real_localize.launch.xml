@@ -1,5 +1,6 @@
 <launch>
     <node pkg="localization" exec="particle_filter" name="particle_filter" output="screen">
         <param from="$(find-pkg-share localization)/real_params.yaml"/>
+        <param name="simulation" value="false" />
     </node>
 </launch>
