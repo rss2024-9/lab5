@@ -167,12 +167,17 @@ class SensorModel:
         observation /= self.resolution * self.lidar_scale_to_map_scale
         observation = np.clip(observation, 0, self.table_width - 1).astype(int)
 
-        #calculate the probability of each vector
-        return np.prod(self.sensor_model_table[observation, raycasts], axis=1)
+        # Different temperature methods for simulation/robot
+        # if self.node.simulation:
+        return np.prod(self.sensor_model_table[observation, raycasts], axis=1) ** 0.25
+        # else:
+            # return np.exp(np.prod(self.sensor_model_table[observation, raycasts], axis=1)) ** (1/2.2)
 
         ####################################
 
     def map_callback(self, map_msg):
+        self.node.get_logger().info("Got the map, processing...")
+        
         # Convert the map to a numpy array
         self.map = np.array(map_msg.data, np.double) / 100.
         self.map = np.clip(self.map, 0, 1)
