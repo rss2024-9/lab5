@@ -168,10 +168,10 @@ class SensorModel:
         observation = np.clip(observation, 0, self.table_width - 1).astype(int)
 
         # Different temperature methods for simulation/robot
-        if self.node.simulation:
-            return np.prod(self.sensor_model_table[observation, raycasts], axis=1) ** 0.25
-        else:
-            return np.exp(np.prod(self.sensor_model_table[observation, raycasts], axis=1)) ** (1/2.2)
+        # if self.node.simulation:
+        return np.prod(self.sensor_model_table[observation, raycasts], axis=1) ** 0.25
+        # else:
+            # return np.exp(np.prod(self.sensor_model_table[observation, raycasts], axis=1)) ** (1/2.2)
 
         ####################################
 
