@@ -29,3 +29,5 @@ particle_filter:
     deterministic: false
 
     lidar_scale_to_map_scale: 1.0
+
+    simulation: false
