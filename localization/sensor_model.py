@@ -184,10 +184,10 @@ class SensorModel:
         origin_o = map_msg.info.origin.orientation
         self.node.get_logger().info(f"({origin_o.x}, {origin_o.y}, {origin_o.z}, {origin_o.w})")
         origin_o = euler_from_quaternion((
-            origin_o.w,
             origin_o.x,
             origin_o.y,
             origin_o.z,
+            origin_o.w,
         ))
         self.node.get_logger().info(f"({origin_o[0]}, {origin_o[1]}, {origin_o[2]})")
         origin = (origin_p.x, origin_p.y, origin_o[2])
